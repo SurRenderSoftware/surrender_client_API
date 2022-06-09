@@ -22,9 +22,3 @@ The server is delivered with all the needed dependencies.
 
 This project is licensed under the Apache License Version 2.0 of January 2004. See the LICENSE file for details.
 (C) 2019 Airbus copyright all rights reserved
-
-## References
-
-Information about the software is available at <https://www.airbus.com/en/products-services/space/exploration/moon#surrender>
-https://arxiv.org/abs/1810.01423 and in the embedded doxygen documentation
-
