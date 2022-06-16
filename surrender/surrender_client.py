@@ -5,7 +5,7 @@ from surrender.surrender_client_base import surrender_client_base;
 
 
 class surrender_client(surrender_client_base):
-    SURRENDER_CLIENT_GIT_REVISION = "c17439eea9ae041bf49364d67a2a232fc89c1faa";
+    SURRENDER_CLIENT_GIT_REVISION = "31f49a7f5306a3e94aff57d36d2e25925a83a994";
     def attachDynamicTexture(self, object_name, element_name, texture_name, texture_unit_id):
         """
         | Link a dynamic texture to an element of an object.
@@ -21,6 +21,30 @@ class surrender_client(surrender_client_base):
         self._flush(True);
         if not self._async:
             ret = self._read_return("attachDynamicTexture");
+
+    def cd(self, path):
+        """
+        | Change the current resource path.
+        | This is similar to the 'cd' command on Linux.
+        """
+        self._check_connection();
+        params = { "" : "cd"};
+        params["path"] = str(path);
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("cd");
+
+    def clearMetadata(self):
+        """
+        | Resets the metadata table
+        """
+        self._check_connection();
+        params = { "" : "clearMetadata"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("clearMetadata");
 
     def createBRDF(self, name, filename, parameters):
         """
@@ -51,7 +75,7 @@ class surrender_client(surrender_client_base):
         params["body_name"] = str(body_name);
         params["shape_name"] = str(shape_name);
         params["brdf_name"] = str(brdf_name);
-        params["textures"] = [ i for i in textures ];
+        params["textures"] = textures;
         self._stream.writeQVariantHash(params);
         self._flush(True);
         if not self._async:
@@ -202,30 +226,57 @@ class surrender_client(surrender_client_base):
         if not self._async:
             ret = self._read_return("dumpPhotonMapToFile");
 
-    def enableDoublePrecisionMode(self, enable):
+    def enableAutoUpdate(self, enable):
         """
-        | Enable (true) or disable (false) double precision mode.
-        | Changing precision mode is not free in raytracing mode as it forces rebuilding OpenCL C kernels of the raytracer.
+        | Enable (true) or disable (false) automatic update of viewer window after rendering.
+        | Default: enabled
+        """
+        self._check_connection();
+        params = { "" : "enableAutoUpdate"};
+        params["enable"] = bool(enable);
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("enableAutoUpdate");
+
+    def enableDoublePrecisionMode(self, *args, **kwargs):
+        """
+        | This function is deprecated and has been removed!
+        | It has been replaced with a stub function to avoid legacy script failures.
         """
         self._check_connection();
         params = { "" : "enableDoublePrecisionMode"};
-        params["enable"] = bool(enable);
         self._stream.writeQVariantHash(params);
         self._flush(True);
-        if not self._async:
-            ret = self._read_return("enableDoublePrecisionMode");
+        self._read_return("enableDoublePrecisionMode");
+        return None;
 
-    def enableFastPSFMode(self, enable):
+    def enableFastPSFMode(self, *args, **kwargs):
         """
-        | Enable (true) or disable (false) fast PSF mode (FFT based convolution in image space).
+        | This function is deprecated and has been removed!
+        | It has been replaced with a stub function to avoid legacy script failures.
         """
         self._check_connection();
         params = { "" : "enableFastPSFMode"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        self._read_return("enableFastPSFMode");
+        return None;
+
+    def enableGlobalDynamicShadowMap(self, enable):
+        """
+        | If true, create a dynamic shadow map to compute sun visibility when rendering all objects
+        | This shadow map is global, ie. adapted to exterior environments such as rover simulations or close range rendez-vous.
+        | It overrides per object shadow maps.
+        | If false, restore the default behavior with per object shadow maps.
+        """
+        self._check_connection();
+        params = { "" : "enableGlobalDynamicShadowMap"};
         params["enable"] = bool(enable);
         self._stream.writeQVariantHash(params);
         self._flush(True);
         if not self._async:
-            ret = self._read_return("enableFastPSFMode");
+            ret = self._read_return("enableGlobalDynamicShadowMap");
 
     def enableIrradianceMode(self, enable):
         """
@@ -239,18 +290,31 @@ class surrender_client(surrender_client_base):
         if not self._async:
             ret = self._read_return("enableIrradianceMode");
 
-    def enableMultilateralFiltering(self, enable):
+    def enableLOSmapping(self, b_enable):
         """
-        | Enable (true) or disable (false) a post-process multilateral filter to reduce noise.
-        | 
+        | enable or disable LOS mapping
+        | If true, LOS map will be allocated on image generation. Otherwise it is destroyed if one was allocated before.
+        | LOS mapping only works in raytracing (in OpenGL you can deduce it from the pinhole model)
         """
         self._check_connection();
-        params = { "" : "enableMultilateralFiltering"};
-        params["enable"] = bool(enable);
+        params = { "" : "enableLOSmapping"};
+        params["b_enable"] = bool(b_enable);
         self._stream.writeQVariantHash(params);
         self._flush(True);
         if not self._async:
-            ret = self._read_return("enableMultilateralFiltering");
+            ret = self._read_return("enableLOSmapping");
+
+    def enableMultilateralFiltering(self, *args, **kwargs):
+        """
+        | This function is deprecated and has been removed!
+        | It has been replaced with a stub function to avoid legacy script failures.
+        """
+        self._check_connection();
+        params = { "" : "enableMultilateralFiltering"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        self._read_return("enableMultilateralFiltering");
+        return None;
 
     def enablePathTracing(self, enable):
         """
@@ -342,6 +406,38 @@ class surrender_client(surrender_client_base):
         if not self._async:
             ret = self._read_return("enableRegularPixelSampling");
 
+    def enableScanningDeviceMode(self, enable):
+        """
+        | Enable (true) or disable (false) scanning device mode (Raytracing only).
+        | Scanning device mode disables optimizations which assume a typical image projection.
+        | This is useful for scanning LiDARs. It has the following characteristics:
+        | - simulate a single detector cell (projection model applied to a 1x1 pixel matrix)
+        | - does not support rendering stars
+        | - PSF tail optimization (blooming) is disabled
+        | - RaySharing is disabled
+        """
+        self._check_connection();
+        params = { "" : "enableScanningDeviceMode"};
+        params["enable"] = bool(enable);
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("enableScanningDeviceMode");
+
+    def enableSkipPixelSampling(self, enable):
+        """
+        | Enable (true) or disable (false) skipping the pixel surface sampling.
+        | Enable only when PSF model is already integrated over the pixel surface otherwise image will be smoother than expected!
+        | Default: disabled
+        """
+        self._check_connection();
+        params = { "" : "enableSkipPixelSampling"};
+        params["enable"] = bool(enable);
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("enableSkipPixelSampling");
+
     def enableSpecularOptimization(self, enable):
         """
         | Enable a dedicated optimization for sampling specular reflections of the Sun (pathtracing only).
@@ -353,6 +449,33 @@ class surrender_client(surrender_client_base):
         self._flush(True);
         if not self._async:
             ret = self._read_return("enableSpecularOptimization");
+
+    def enableTimeMapping(self, b_enable):
+        """
+        | enable or disable time mapping
+        | If true, time map will be allocated on image generation. Otherwise it is destroyed if one was allocated before.
+        | Time mapping only works in raytracing
+        """
+        self._check_connection();
+        params = { "" : "enableTimeMapping"};
+        params["b_enable"] = bool(b_enable);
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("enableTimeMapping");
+
+    def exists(self, object_name):
+        """
+        | Returns true if an object with the given name already exists.
+        | This function checks aliases and builtin objects!
+        """
+        self._check_connection();
+        params = { "" : "exists"};
+        params["object_name"] = str(object_name);
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("exists");
+        return ret["exists"]
 
     def generateMicroTasks(self):
         """
@@ -416,16 +539,29 @@ class surrender_client(surrender_client_base):
         ret = self._read_return("getCubeMapSize");
         return ret["cube_map_size"]
 
-    def getDoublePrecisionMode(self):
+    def getDoublePrecisionMode(self, *args, **kwargs):
         """
-        | Return true is double precision mode is enabled, false otherwise.
+        | This function is deprecated and has been removed!
+        | It has been replaced with a stub function to avoid legacy script failures.
         """
         self._check_connection();
         params = { "" : "getDoublePrecisionMode"};
         self._stream.writeQVariantHash(params);
         self._flush(True);
-        ret = self._read_return("getDoublePrecisionMode");
-        return ret["enable"]
+        self._read_return("getDoublePrecisionMode");
+        return None;
+
+    def getGlobalVariables(self):
+        """
+        | Return the values of active global SuMoL variables.
+        | 
+        """
+        self._check_connection();
+        params = { "" : "getGlobalVariables"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("getGlobalVariables");
+        return ret["names_and_values"]
 
     def getImageSize(self):
         """
@@ -460,6 +596,17 @@ class surrender_client(surrender_client_base):
         ret = self._read_return("getIrradianceMode");
         return ret["enable"]
 
+    def getLOSmapping(self):
+        """
+        | return true is LOS mapping is enabled, false otherwise.
+        """
+        self._check_connection();
+        params = { "" : "getLOSmapping"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("getLOSmapping");
+        return ret["b_enable"]
+
     def getMaxSamplesPerPixel(self):
         """
         | Return the maximum number of samples allowed per pixel.
@@ -493,6 +640,17 @@ class surrender_client(surrender_client_base):
         self._flush(True);
         ret = self._read_return("getMaxShadowRays");
         return ret["max_shadow_rays"]
+
+    def getMetadata(self):
+        """
+        | Returns the metadata table
+        """
+        self._check_connection();
+        params = { "" : "getMetadata"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("getMetadata");
+        return ret["metadata"]
 
     def getNbSamplesPerPixel(self):
         """
@@ -643,6 +801,17 @@ class surrender_client(surrender_client_base):
         ret = self._read_return("getRessourcePath");
         return ret["ressource_path"]
 
+    def getScanningDeviceMode(self):
+        """
+        | Return the status of scanning device mode.
+        """
+        self._check_connection();
+        params = { "" : "getScanningDeviceMode"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("getScanningDeviceMode");
+        return ret["enable"]
+
     def getSelfVisibilitySamplingStep(self):
         """
         | Return the sampling step for self visibility maps.
@@ -688,6 +857,17 @@ class surrender_client(surrender_client_base):
         ret = self._read_return("getSunPower");
         return ret["sun_power"]
 
+    def getTimeMapping(self):
+        """
+        | return true is time mapping is enabled, false otherwise.
+        """
+        self._check_connection();
+        params = { "" : "getTimeMapping"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("getTimeMapping");
+        return ret["b_enable"]
+
     def help(self, function_name):
         """
         | Print the available documentation for function 'function_name'.
@@ -697,8 +877,45 @@ class surrender_client(surrender_client_base):
         params["function_name"] = str(function_name);
         self._stream.writeQVariantHash(params);
         self._flush(True);
+        ret = self._read_return("help");
+        print(ret['help']);
+        return ret["help"]
+
+    def intersectScene(self, rays):
+        """
+        | Compute the intersection of a set of rays with the scene
+        | Each ray is stored as a (position,direction) pair in a std::vector/list
+        | Returns the distance to the hit along each ray.
+        """
+        self._check_connection();
+        params = { "" : "intersectScene"};
+        params["rays"] = rays;
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("intersectScene");
+        return ret["distance_to_hit"]
+
+    def loadAndProjectMultipleMeshes(self, object_name, mesh_names, positions, attitudes, projection_center, offset_ratio):
+        """
+        | Like loadMultipleMeshes it loads a list of meshes with the given positions and attitudes into a single object.
+        | A quaternion on the unit sphere is a simple rotation, otherwise its norm is interpreted as a scaling factor.
+        | The difference with loadMultipleMeshes is the projection of the given position onto the scene towards a projection center.
+        | This point is defined in homogeneous coordinates and can be set at inifinity by setting its last coordinate to 0.
+        | The last parameter is the offset, relative to the radius of each instance's bounding sphere, from the surface to the center of each object.
+        | An offset_ratio of 0 means the center is on the surface, 1 means a sphere would be at the limit of penetrating the surface.
+        """
+        self._check_connection();
+        params = { "" : "loadAndProjectMultipleMeshes"};
+        params["object_name"] = str(object_name);
+        params["mesh_names"] = mesh_names;
+        params["positions"] = positions;
+        params["attitudes"] = attitudes;
+        params["projection_center"] = self._vec(projection_center);
+        params["offset_ratio"] = float(offset_ratio);
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
         if not self._async:
-            ret = self._read_return("help");
+            ret = self._read_return("loadAndProjectMultipleMeshes");
 
     def loadMotionModel(self, filename, parameters):
         """
@@ -717,13 +934,14 @@ class surrender_client(surrender_client_base):
     def loadMultipleMeshes(self, object_name, mesh_names, positions, attitudes):
         """
         | Load a list of meshes with the given positions and attitudes into a single object.
+        | A quaternion on the unit sphere is a simple rotation, otherwise its norm is interpreted as a scaling factor.
         """
         self._check_connection();
         params = { "" : "loadMultipleMeshes"};
         params["object_name"] = str(object_name);
-        params["mesh_names"] = [ i for i in mesh_names ];
-        params["positions"] = [ i for i in positions ];
-        params["attitudes"] = [ i for i in attitudes ];
+        params["mesh_names"] = mesh_names;
+        params["positions"] = positions;
+        params["attitudes"] = attitudes;
         self._stream.writeQVariantHash(params);
         self._flush(True);
         if not self._async:
@@ -772,6 +990,22 @@ class surrender_client(surrender_client_base):
         if not self._async:
             ret = self._read_return("loadSpectrumModel");
 
+    def loadTextureObject(self, name, filename, parameters):
+        """
+        | Load a texture. It can be any supported type of image format.
+        | It can also be a procedural texture model written in SuMoL from the file 'filename' with the parameters in 'parameters' and give it the the name 'name'.
+        | A procedural texture model describes a 2D or 3D texture (4D color spectrum) using lookup functions.
+        """
+        self._check_connection();
+        params = { "" : "loadTextureObject"};
+        params["name"] = str(name);
+        params["filename"] = str(filename);
+        params["parameters"] = parameters;
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("loadTextureObject");
+
     def loadTimeSamplingModel(self, filename, parameters):
         """
         | Load a sampling model (raytracing) which defines when and for how long pixels gather light.
@@ -786,6 +1020,19 @@ class surrender_client(surrender_client_base):
         if not self._async:
             ret = self._read_return("loadTimeSamplingModel");
 
+    def ls(self):
+        """
+        | List the content of the current resource path
+        | This is similar to the 'ls -lh' command on Linux.
+        """
+        self._check_connection();
+        params = { "" : "ls"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("ls");
+        print(ret['listing']);
+        return ret["listing"]
+
     def printAPI(self):
         """
         | List all the functions of the client API.
@@ -794,8 +1041,9 @@ class surrender_client(surrender_client_base):
         params = { "" : "printAPI"};
         self._stream.writeQVariantHash(params);
         self._flush(True);
-        if not self._async:
-            ret = self._read_return("printAPI");
+        ret = self._read_return("printAPI");
+        print(ret['api']);
+        return ret["api"]
 
     def printObjectStructure(self, object_name):
         """
@@ -806,8 +1054,9 @@ class surrender_client(surrender_client_base):
         params["object_name"] = str(object_name);
         self._stream.writeQVariantHash(params);
         self._flush(True);
-        if not self._async:
-            ret = self._read_return("printObjectStructure");
+        ret = self._read_return("printObjectStructure");
+        print(ret['object_structure']);
+        return ret["object_structure"]
 
     def printState(self, state):
         """
@@ -819,7 +1068,21 @@ class surrender_client(surrender_client_base):
         self._stream.writeQVariantHash(params);
         self._flush(True);
         ret = self._read_return("printState");
+        print(ret['readable_state']);
         return ret["readable_state"]
+
+    def pwd(self):
+        """
+        | Return the current resource path.
+        | This is similar to the 'pwd' command on Linux.
+        """
+        self._check_connection();
+        params = { "" : "pwd"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        ret = self._read_return("pwd");
+        print(ret['path']);
+        return ret["path"]
 
     def render(self):
         """
@@ -842,7 +1105,7 @@ class surrender_client(surrender_client_base):
         """
         self._check_connection();
         params = { "" : "renderMicroTasks"};
-        params["utasks"] = [ i for i in utasks ];
+        params["utasks"] = utasks;
         self._stream.writeQVariantHash(params);
         self._flush(True);
         if not self._async:
@@ -1100,6 +1363,19 @@ class surrender_client(surrender_client_base):
         if not self._async:
             ret = self._read_return("setFocus");
 
+    def setGlobalVariables(self, names_and_values):
+        """
+        | Set the values of a set of global SuMoL variables.
+        | NB: this only affects globals for already loaded SuMoL models. When loading a new model its globals will be kept at their default values!
+        """
+        self._check_connection();
+        params = { "" : "setGlobalVariables"};
+        params["names_and_values"] = names_and_values;
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("setGlobalVariables");
+
     def setImageSize(self, width, height):
         """
         | Set image size.
@@ -1162,6 +1438,21 @@ class surrender_client(surrender_client_base):
         self._flush(True);
         if not self._async:
             ret = self._read_return("setMaxShadowRays");
+
+    def setMetadata(self, name, value):
+        """
+        | Add, update or remove a metadata
+        | If value is empty, the metadata is removed
+        | Metadata are used when sending images over TCP. This is typically used to store timestamps and image IDs.
+        """
+        self._check_connection();
+        params = { "" : "setMetadata"};
+        params["name"] = str(name);
+        params["value"] = value;
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("setMetadata");
 
     def setNbSamplesPerPixel(self, nb_samples):
         """
@@ -1314,9 +1605,7 @@ class surrender_client(surrender_client_base):
         | Available properties are:
         | photon_map (boolean)              If true object will have a photon map to accumulate energy received on its surface.
         | normal_map_object_space (boolean) If true normal maps are read in object frame instead of tangent space.
-        | StarModelRangeThreshold           Distance to the camera in meters above which the object is rendered as a star.
-        | SmallModelRangeThreshold          Distance to the camera in meters above which the object is rendered as a small object/billboard (NOT IMPLEMENTED).
-        | skip_pathtracing (boolean)        If true the object won't be sampled as a secondary light source when pathtracing is enabled.
+        | skip_path_tracing (boolean)       If true the object won't be sampled as a secondary light source when pathtracing is enabled.
         """
         self._check_connection();
         params = { "" : "setObjectProperty"};
@@ -1448,6 +1737,32 @@ class surrender_client(surrender_client_base):
         self._flush(True);
         if not self._async:
             ret = self._read_return("setSunPower");
+
+    def setSunPowerAtDistance(self, sun_color, distance):
+        """
+        | Set the received from the Sun for each wave length simulated at a given distance.
+        | This is expressed in W/m² for the power and in m for the distance.
+        """
+        self._check_connection();
+        params = { "" : "setSunPowerAtDistance"};
+        params["sun_color"] = self._vec(sun_color);
+        params["distance"] = float(distance);
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("setSunPowerAtDistance");
+
+    def updateDisplay(self):
+        """
+        | Update viewer window on the server side.
+        | This is useful after framebuffer has been modified with a PerPixelProcess
+        """
+        self._check_connection();
+        params = { "" : "updateDisplay"};
+        self._stream.writeQVariantHash(params);
+        self._flush(True);
+        if not self._async:
+            ret = self._read_return("updateDisplay");
 
     def updateDynamicTexture(self, name):
         """
