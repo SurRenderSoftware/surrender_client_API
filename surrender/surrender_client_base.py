@@ -11,7 +11,10 @@ import os
 import socket
 import struct
 import zlib
+import lz4.block as lz4
 from hashlib import md5
+import gc
+import io
 
 class surrender_client_base:
     XYZ_SCALAR_CONVENTION = 0;
@@ -24,8 +27,12 @@ class surrender_client_base:
     _DT_Bool = 1;
     _DT_Int = 2;
     _DT_UInt = 3;
+    _DT_LongLong = 4;
     _DT_ULongLong = 5;
     _DT_Double = 6;
+    _DT_Long = 129;
+    _DT_ULong = 132;
+    _DT_Float = 135;
     _DT_Map = 8;
     _DT_List = 9;
     _DT_String = 10;
@@ -59,14 +66,28 @@ class surrender_client_base:
                 pass;
             self._sock = None;
 
-    def connectToServer(self, hostname, port = 5151):
+    def connectToServer(self, hostname, port = None):
         """
         Connect to a Surrender server. First parameter is the hostname, second parameter the TCP port.
+        Default port is 5151 unless overriden by environment variable SURRENDER_SERVER_PORT
         """
+        gc.collect()    # Force garbage collection to release dead SurRender sessions
+                        # which may still hold valuable resources such as shared memory
+        port_env_var_name = 'SURRENDER_SERVER_PORT'
+        if port is None:
+            port = 5151
+            if port_env_var_name in os.environ:
+                try:
+                    port = int(os.environ[port_env_var_name])
+                except:
+                    pass;
+
         if self._sock:
             self._sock.close();
             self._sock = None;
 
+        self._hostname = None;
+        self._port = None;
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0);
         if self._sock == -1 or self._sock == None:
             raise IOError("Error creating TCP socket");
@@ -83,6 +104,16 @@ class surrender_client_base:
             if self._exception_on_error:
                 raise RuntimeError(msg);
             return;
+        self._hostname = hostname;
+        self._port = port;
+
+    @property
+    def hostname(self):
+        return self._hostname;
+    
+    @property
+    def port(self):
+        return self._port;
 
     def getImage(self):
         """
@@ -98,7 +129,7 @@ class surrender_client_base:
         h32 = ret["h"];
 
         if ret["compressed"]:
-            _buf = self._uncompress(ret["image_data"]);
+            _buf = self._uncompress(ret["image_data"], ret["compression_level"] if "compression_level" in ret else 1);
         else:
             _buf = ret["image_data"];
 
@@ -117,7 +148,7 @@ class surrender_client_base:
         h32 = ret["h"];
 
         if ret["compressed"]:
-            _buf = self._uncompress(ret["image_data"]);
+            _buf = self._uncompress(ret["image_data"], ret["compression_level"] if "compression_level" in ret else 1);
         else:
             _buf = ret["image_data"];
 
@@ -137,7 +168,7 @@ class surrender_client_base:
         h32 = ret["h"];
 
         if ret["compressed"]:
-            _buf = self._uncompress(ret["depth_data"]);
+            _buf = self._uncompress(ret["depth_data"], ret["compression_level"] if "compression_level" in ret else 1);
         else:
             _buf = ret["depth_data"];
 
@@ -157,7 +188,7 @@ class surrender_client_base:
         h32 = ret["h"];
 
         if ret["compressed"]:
-            _buf = self._uncompress(ret["normal_data"]);
+            _buf = self._uncompress(ret["normal_data"], ret["compression_level"] if "compression_level" in ret else 1);
         else:
             _buf = ret["normal_data"];
 
@@ -182,7 +213,7 @@ class surrender_client_base:
             return None
 
         if ret["compressed"]:
-            _buf = self._uncompress(ret["los_data"]);
+            _buf = self._uncompress(ret["los_data"], ret["compression_level"] if "compression_level" in ret else 1);
         else:
             _buf = ret["los_data"];
 
@@ -207,11 +238,61 @@ class surrender_client_base:
             return None
 
         if ret["compressed"]:
-            _buf = self._uncompress(ret["time_data"]);
+            _buf = self._uncompress(ret["time_data"], ret["compression_level"] if "compression_level" in ret else 1);
         else:
             _buf = ret["time_data"];
 
         return np.flipud(np.frombuffer(_buf, dtype=np.float32).reshape(h32, w32));
+
+    def getLabelMap(self):
+        """
+        | Returns the label map of the last raytraced image in single precision.
+        | Each pixel is a float containing the label for each simulated pixel.
+        | 'Empty' pixels (pixels we don't bother to scan because we known there is nothing or
+        | because pixel integration time is 0) will be set to 0.
+        """
+        self._check_connection();
+        self._stream.writeQVariantHash({ "" : "getLabelMap" });
+        self._flush(True);
+        ret = self._read_return("getLabelMap");
+
+        w32 = ret["w"];
+        h32 = ret["h"];
+        
+        if w32 * h32 == 0:
+            return None
+
+        if ret["compressed"]:
+            _buf = self._uncompress(ret["label_data"], ret["compression_level"] if "compression_level" in ret else 1);
+        else:
+            _buf = ret["label_data"];
+
+        return np.flipud(np.frombuffer(_buf, dtype=np.float32).reshape(h32, w32));
+
+    def getVarianceMap(self):
+        """
+        | Returns the variance map of the last raytraced image in single precision.
+        | Each pixel is a float containing the variance for each simulated pixel.
+        | 'Empty' pixels (pixels we don't bother to scan because we known there is nothing or
+        | because pixel integration time is 0) will be set to 0.
+        """
+        self._check_connection();
+        self._stream.writeQVariantHash({ "" : "getVarianceMap" });
+        self._flush(True);
+        ret = self._read_return("getVarianceMap");
+
+        w32 = ret["w"];
+        h32 = ret["h"];
+
+        if w32 * h32 == 0:
+            return None
+
+        if ret["compressed"]:
+            _buf = self._uncompress(ret["variance_data"], ret["compression_level"] if "compression_level" in ret else 1);
+        else:
+            _buf = ret["variance_data"];
+
+        return np.flipud(np.frombuffer(_buf, dtype=np.float32).reshape(h32, w32, 4));
 
     def closeViewer(self):
         """
@@ -219,7 +300,28 @@ class surrender_client_base:
         """
         self._stream.writeQVariantHash({ "" : "closeViewer" });
         self._flush(True);
-        self._read_return("closeViewer");
+        if not self._async:
+            self._read_return("closeViewer");
+
+    def record(self):
+        """
+        Start the recording of commands received by the server. This is meant to be used later with generateReplay to
+        generate a Python script which will replay the recorded commands. Very useful for debugging complex simulation chains.
+        """
+        self._stream.writeQVariantHash({ "" : "record" });
+        self._flush(True);
+        if not self._async:
+            self._read_return("record");
+
+    def generateReplay(self):
+        """
+        Generate a Python script from recorded commands (see record). This allows extracting SurRender's command flow from
+        arbitrarily complex scripts. Very useful for debugging.
+        """
+        self._stream.writeQVariantHash({ "" : "generateReplay" });
+        self._flush(True);
+        ret = self._read_return("generateReplay");
+        return ret["replay"]
 
     def setCompressionLevel(self, lvl):
         """
@@ -232,7 +334,8 @@ class surrender_client_base:
             };
         self._stream.writeQVariantHash(params);
         self._flush(True);
-        self._read_return("setCompressionLevel");
+        if not self._async:
+            self._read_return("setCompressionLevel");
         
     def getImageGray32F(self):
         """
@@ -247,7 +350,7 @@ class surrender_client_base:
         h32 = ret["h"];
 
         if ret["compressed"]:
-            _buf = self._uncompress(ret["image_data"]);
+            _buf = self._uncompress(ret["image_data"], ret["compression_level"] if "compression_level" in ret else 1);
         else:
             _buf = ret["image_data"];
 
@@ -266,7 +369,7 @@ class surrender_client_base:
         h32 = ret["h"];
 
         if ret["compressed"]:
-            _buf = self._uncompress(ret["image_data"]);
+            _buf = self._uncompress(ret["image_data"], ret["compression_level"] if "compression_level" in ret else 1);
         else:
             _buf = ret["image_data"];
 
@@ -298,40 +401,8 @@ class surrender_client_base:
         self._stream.writeQVariantHash({ "" : "runLUAScript",
                                   "filename" : str(filename) });
         self._flush(True);
-        ret = self._read_return("runLUAScript");
-        return ret.get("return");
-
-    # Data is required to be in scanline order
-    def updateUserDataTexture(self, name, data, compressionLevel):
-        """
-        | Send texture data to replace the content of a dynamic user texture.
-        | name is the name of the texture to update.
-        | data a vector of float values, one for each pixel.
-        | compressionLevel allows enabling compression to speed up transfer (-1 means LZ4, 0 means no compression, 1-9 means zlib compression).
-        """
-        self._check_connection();
-        params = {
-            "name" : str(name),
-            "" : "updateUserDataTexture"
-            };
-        if compressionLevel != -2:  # Zlib compression (deflate)
-            params["data"] = self._compress(data, compressionLevel);
-        else:                       # LZ4 compression
-##ifdef LZ4_FOUND
-#            params["size"] = uint32_t(data.size() * sizeof(data.front()));
-#            params["use_lz4"] = true;
-#            QByteArray qdata = QByteArray::fromRawData((const char*)data.data(), data.size() * sizeof(data.front()));
-#            const int worst_size = LZ4_compressBound(qdata.size());
-#            QByteArray lz4_data(worst_size, Qt::Uninitialized);
-#            const int lz4_size = LZ4_compress(qdata.data(), lz4_data.data(), qdata.size());
-#            lz4_data.resize(lz4_size);
-#            params["data"] = lz4_data;
-##else
-            self._printError("LZ4 support not implemented, falling back to zlib compression level 1");
-            params["data"] = self._compress(data, 1);
-        self._stream.writeQVariantHash(params);
-        self._flush(True);
-        self._read_return("updateUserDataTexture");
+        if not self._async:
+            self._read_return("runLUAScript");
 
     # Timeout in seconds for TCP requests
     def setTimeOut(self, timeout):
@@ -364,7 +435,8 @@ class surrender_client_base:
 
         self._stream.writeQVariantHash(params);
         self._flush(True);
-        self._read_return("setPSF");
+        if not self._async:
+            self._read_return("setPSF");
 
     def setPSFWithTail(self, psf_image,
                        psf_tail_image,
@@ -410,7 +482,8 @@ class surrender_client_base:
 
         self._stream.writeQVariantHash(params);
         self._flush(True);
-        self._read_return("setPSFWithTail");
+        if not self._async:
+            self._read_return("setPSFWithTail");
 
 #        void getGMCVideo_streamRGB8(image_rgba8_t &image);
 #
@@ -429,7 +502,7 @@ class surrender_client_base:
         h32 = ret["h"];
         
         if ret["compressed"]:
-            _buf = self._uncompress(ret["image_data"]);
+            _buf = self._uncompress(ret["image_data"], ret["compression_level"] if "compression_level" in ret else 1);
             # Reorder bytes (splitting the 4 bytes of each float into 4 planes helps compressing data)
             byte_planes = np.frombuffer(_buf, dtype=np.uint8).reshape(4,h32, w32);
             img = np.frombuffer(byte_planes.transpose(1,2,0).tobytes(), dtype=np.float32).reshape(h32,w32);
@@ -472,6 +545,28 @@ class surrender_client_base:
         | offset is an offset, in bytes, from the beginning of the file.
         | append enables keeping file content, otherwise file content is discarded before writing.
         """
+        if type(data) == str:
+            data = open(data, 'rb');
+        
+        if type(data) == io.BufferedReader:
+            file_size = data.seek(0, 2)
+            data.seek(0)
+            offset = 0
+            append = False
+            last_ratio = int(0)
+            print('Sending "{}" to server'.format(filename))
+            for chunk in iter(lambda: data.read(1048576), b""):
+                self.sendFile(filename, chunk, compressionLevel, offset, append)
+                offset += len(chunk)
+                append = True
+
+                ratio = int(offset * 100 / file_size)
+                if last_ratio != ratio:
+                    last_ratio = ratio
+                    print("\r{}%    ".format(ratio), end="", flush=True)
+            print("\r    \r", end="", flush=True)
+            return;
+        
         self._check_connection();
         params = {
             "filename" : str(filename),
@@ -486,7 +581,8 @@ class surrender_client_base:
             params["data"] = self._compress(data, compressionLevel);
         self._stream.writeQVariantHash(params);
         self._flush(True);
-        self._read_return("sendFile");
+        if not self._async:
+            self._read_return("sendFile");
 
     def syncDir(self, dirname, compressionLevel = -1):
         """
@@ -654,23 +750,8 @@ class surrender_client_base:
                 target = req.get("target")
                 if type(target) == type(None):
                     target = fname;
-                last_ratio = int(0)
-                print('Sending "{}" to server'.format(dirname + "/" + fname))
                 with open(dirname + "/" + fname, "rb") as f:
-                    file_size = f.seek(0,2)
-                    f.seek(0)
-                    offset = 0;
-                    append = False;
-                    for chunk in iter(lambda: f.read(1048576), b""):
-                        self.sendFile(target, chunk, compressionLevel, offset, append);
-                        offset += len(chunk);
-                        append = True;
-
-                        ratio = int(offset * 100 / file_size)
-                        if (last_ratio != ratio):
-                            last_ratio = ratio
-                            print('\r{}%    '.format(ratio), end='', flush=True)
-                print('\r    \r', end='', flush=True)
+                    self.sendFile(target, f, compressionLevel);
                         
         return ret;
 
@@ -681,6 +762,26 @@ class surrender_client_base:
     # This will fail if object is not a 4x4 numpy array
     def _mat44(self, v):
         return [ [ float(v[j,i]) for i in range(4) ] for j in range(4)]
+
+    # Used for DMatrix type on C++ side
+    def _dmatrix(self, v, dtype, channels):
+        m = np.array(v, dtype=dtype);
+        if channels == 1 and len(m.shape) > 2 and m.shape[2] != channels:
+            raise RuntimeError("Wrong channel count")
+        if channels > 1 and (len(m.shape) <= 2 or m.shape[2] != channels):
+            raise RuntimeError("Wrong channel count")
+        return [ m.shape[0], m.shape[1], m.tobytes() ]
+    # Used to decode DMatrix type
+    def _from_dmatrix(self, v, dtype, channels):
+        rows = v[0]
+        cols = v[1]
+        data = v[2]
+        mat = np.frombuffer(data, dtype)
+        if channels == 1:
+            mat = mat.reshape((rows, cols))
+        else:
+            mat = mat.reshape((rows, cols, channels))
+        return mat
 
     # Write support functions    
     def _write_int8(self, v):
@@ -734,10 +835,12 @@ class surrender_client_base:
         
     def _write(self, v):
         T = type(v)
+        # numpy 1.24.0 no longer supports np.object, np.bool, np.float, np.complex, np.str, np.int
+        # this is why we use hasattr to handle numpy>=1.24.0 and remain compatible with older numpy releases
         if T == np.float16 or\
             T == np.float32 or\
-            T == np.float64 or\
-            T == np.float or\
+            T == np.float64 or \
+            (hasattr(np, "float") and T == np.float) or\
             T == float:
             self._write_uint32(self._DT_Double)
             self._write_uint8(0)
@@ -749,8 +852,8 @@ class surrender_client_base:
         elif T == np.int8 or\
             T == np.int16 or\
             T == np.int32 or\
-            T == np.int64 or\
-            T == np.int or\
+            T == np.int64 or \
+            (hasattr(np, "int") and T == np.int) or\
             T == np.uint8 or\
             T == np.uint16 or\
             T == np.uint32 or\
@@ -778,6 +881,12 @@ class surrender_client_base:
             self._write_uint8(0)
             self._write_map(v)
         elif T == list or T == tuple or T == np.ndarray:    # Interpret tuples and numpy arrays as lists
+            self._write_uint32(self._DT_List)
+            self._write_uint8(0)
+            self._write_list(v)
+        elif T == set: # Interpret sets as lists if their size is 0 or 1
+            if len(v) > 1:
+                raise RuntimeError('A set with more than one element is ambiguous! Aborting! Did you mean using [] instead of {} ?')
             self._write_uint32(self._DT_List)
             self._write_uint8(0)
             self._write_list(v)
@@ -864,14 +973,18 @@ class surrender_client_base:
         self._read_uint8()
         if T == self._DT_Double:
             return self._read_float64()
+        elif T == self._DT_Float:
+            return self._read_float32()
         elif T == self._DT_Bool:
             return self._read_uint8() != 0
         elif T == self._DT_Int:
             return self._read_int32()
         elif T == self._DT_UInt:
             return self._read_uint32()
-        elif T == self._DT_ULongLong:
+        elif T == self._DT_ULongLong or T == self._DT_ULong:
             return self._read_uint64()
+        elif T == self._DT_LongLong or T == self._DT_Long:
+            return self._read_int64()
         elif T == self._DT_String:
             return self._read_string()
         elif T == self._DT_Hash or T == self._DT_Map:
@@ -894,6 +1007,11 @@ class surrender_client_base:
         buf = zlib.compress(buffer, level)
         return struct.pack('>I', int(len(buf))) + buf
     
-    def _uncompress(self, buffer):
+    def _uncompress(self, buffer, level):
+        if level == 0:
+            return buffer;
+        if level == -1:
+            size = struct.unpack('<I', buffer[0:4])[0]
+            return lz4.decompress(buffer[4:], uncompressed_size = size)
         size = struct.unpack('>I', buffer[0:4])[0]
         return zlib.decompress(buffer[4:], bufsize = size)

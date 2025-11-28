@@ -145,11 +145,19 @@ def MatToQuat(R):
   angle_axis = vec3(R[2, 1] - R[1, 2],
                     R[0, 2] - R[2, 0],
                     R[1, 0] - R[0, 1])
-  sin_theta = np.sqrt(np.dot(angle_axis, angle_axis)) * 0.5
-  cos_theta = (R[0, 0] + R[1, 1] + R[2, 2]) * 0.5 - 0.5
-  angle_axis = normalize(angle_axis)
-  theta = np.arctan2(sin_theta, cos_theta)
-  return quat(angle_axis, theta)
+  if norm(angle_axis) < 1e-3:
+      dQ = quat(normalize(np.random.randn(3)), np.pi/4);
+      dR = QuatToMat(dQ)
+      Q = MatToQuat(dR@R)
+      dQ[1:4] = -dQ[1:4]
+      Q = quat_mult(dQ, Q)
+      return Q
+  else:
+      sin_theta = np.sqrt(np.dot(angle_axis, angle_axis)) * 0.5
+      cos_theta = (R[0, 0] + R[1, 1] + R[2, 2]) * 0.5 - 0.5
+      angle_axis = normalize(angle_axis)
+      theta = np.arctan2(sin_theta, cos_theta)
+      return quat(angle_axis, theta)
 
 def quaternion_from_vec_to_vec(a, b):
   """
@@ -168,7 +176,7 @@ def quaternion_from_vec_to_vec(a, b):
       ab = vec3(1,0,0);
   return quat(ab, np.arccos(np.dot(normalize(b), normalize(a))))
 
-def look_at(s, eye_pos, target_pos):
+def look_at(s, eye_pos, target_pos, up=None):
   """
   Set the camera at eye_pos and an attitude such that viewing direction is looking to target_pos.
 
@@ -181,7 +189,15 @@ def look_at(s, eye_pos, target_pos):
   s.setConventions(s.SCALAR_XYZ_CONVENTION, s.Z_BACKWARD);
       
   s.setObjectPosition("camera", eye_pos)
-  s.setObjectAttitude("camera", quaternion_from_vec_to_vec(vec3(0,0,-1), target_pos - eye_pos))
+  if up is None:
+      s.setObjectAttitude("camera", quaternion_from_vec_to_vec(vec3(0,0,-1), target_pos - eye_pos))
+  else:
+      z = normalize(eye_pos - target_pos)
+      y = normalize(up)
+      x = normalize(np.cross(y, z))
+      y = normalize(np.cross(z, x))
+      R = np.array([x,y,z]).transpose()
+      s.setObjectAttitude("camera", MatToQuat(R))
   s.setConventions(conventions[0], conventions[1]);
 
 def look_at_star(surrender_client, right_ascension, declination):

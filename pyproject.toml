@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "surrender"
+version = "9.3.0"
+authors = [
+  { name="Nicolas Ollagnier", email="nicolas.ollagnier@aribus.com" },
+]
+description = "SurRender Python client"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "numpy>=1.24.4",
+    "lz4>=4.3.3",
+]
+
+[project.optional-dependencies]
+# for building the wheel
+build = [
+    "build==1.1.1",
+]
+# for publishing to private PYPI
+twine = [
+    "twine",
+]
+
+[tool.setuptools.packages.find]
+include = ["surrender*"]
+
+[project.urls]
+"Homepage" = "https://github.com/SurRenderSoftware/surrender_client_API"
+
+[tool.uv]
+allow-insecure-host = ["aforge-frdr.biz.nstd.fr.airbusds.corp"]
+
+[[tool.uv.index]]
+name = "aforge"
+url = "https://aforge-frdr.biz.nstd.fr.airbusds.corp/artifactory/api/pypi/gw_files_pythonhosted_org_4dev/simple"
