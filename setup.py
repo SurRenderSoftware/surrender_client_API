@@ -5,7 +5,7 @@ dependencies = ['numpy']
 
 setup(
     name='SurRender',
-    version='8.0',
+    version='7.0',
     author='berjaoui',
     author_email='surrender.software@airbus.com',
     packages=find_packages(),
